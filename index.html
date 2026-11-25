@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>中山獼猴大作戰</title>
+<style>
+  :root {
+    --ink: #2b2118;
+    --cream: #fff8ec;
+    --accent: #ff7a1a;
+    --accent-dark: #c4520a;
+    --good: #2fa36b;
+    --bad: #e0453a;
+    --panel: rgba(255, 248, 236, 0.94);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+    color: var(--ink); user-select: none; -webkit-user-select: none; touch-action: manipulation;
+  }
+  #stage {
+    position: fixed; inset: 0;
+    background-size: cover; background-position: center;
+    cursor: crosshair; overflow: hidden;
+  }
+  #stage::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.28), rgba(0,0,0,0) 22%, rgba(0,0,0,0) 80%, rgba(0,0,0,0.25));
+    pointer-events: none;
+  }
+  #sceneMark {
+    position: absolute; left: 50%; top: 55%; transform: translate(-50%, -50%);
+    font-size: 15vw; font-weight: 900; letter-spacing: 0.1em; white-space: nowrap;
+    color: rgba(255,255,255,0.13); pointer-events: none;
+  }
+  .shake { animation: shake 0.35s; }
+  @keyframes shake {
+    0%, 100% { transform: translate(0, 0); }
+    20% { transform: translate(-8px, 4px); }
+    40% { transform: translate(7px, -5px); }
+    60% { transform: translate(-6px, -3px); }
+    80% { transform: translate(5px, 4px); }
+  }
+
+  /* HUD */
+  #hud {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 20;
+    display: flex; justify-content: space-between; align-items: center; gap: 6px;
+    padding: max(10px, env(safe-area-inset-top)) 12px 10px;
+    pointer-events: none;
+  }
+  .pill {
+    background: var(--panel); border-radius: 999px; padding: 6px 12px;
+    font-weight: 800; font-size: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    display: flex; align-items: center; gap: 6px; white-space: nowrap;
+  }
+  .pill small { font-weight: 600; font-size: 11px; opacity: 0.65; }
+  #timeBar {
+    position: absolute; left: 0; bottom: 0; height: 6px; z-index: 20;
+    background: var(--accent); width: 100%; transition: width 0.1s linear;
+  }
+  #comboBadge {
+    position: absolute; top: 64px; left: 50%; transform: translateX(-50%) scale(0.8);
+    z-index: 20; font-size: 22px; font-weight: 900; color: #fff;
+    text-shadow: 0 2px 0 var(--accent-dark), 0 0 12px rgba(0,0,0,0.4);
+    opacity: 0; transition: opacity 0.2s, transform 0.2s; pointer-events: none;
+  }
+  #comboBadge.on { opacity: 1; transform: translateX(-50%) scale(1); }
+
+  /* Monkey */
+  .monkey {
+    position: absolute; width: 92px; height: 92px; z-index: 10;
+    animation: pop 0.22s ease-out; touch-action: none;
+  }
+  .monkey svg { width: 100%; height: 100%; display: block; pointer-events: none;
+    filter: drop-shadow(0 4px 4px rgba(0,0,0,0.35)); }
+  .monkey .timer {
+    position: absolute; left: 12%; right: 12%; bottom: -8px; height: 5px;
+    background: rgba(0,0,0,0.3); border-radius: 3px; overflow: hidden; pointer-events: none;
+  }
+  .monkey .timer i { display: block; height: 100%; background: #ffd24a; transform-origin: left; }
+  .monkey.hit { animation: bonk 0.3s forwards; pointer-events: none; }
+  .monkey.flee { animation: flee 0.4s forwards; pointer-events: none; }
+  @keyframes pop { from { transform: scale(0.2) translateY(30px); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  @keyframes bonk { 0% { transform: scale(1); } 40% { transform: scale(1.2) rotate(-12deg); } 100% { transform: scale(0) rotate(30deg); opacity: 0; } }
+  @keyframes flee { to { transform: translateY(-120px) scale(0.6); opacity: 0; } }
+
+  .float {
+    position: absolute; z-index: 15; font-weight: 900; font-size: 20px; pointer-events: none;
+    color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,0.45); animation: rise 0.7s forwards;
+    transform: translate(-50%, -50%);
+  }
+  .float.bad { color: #ffd9d6; font-size: 17px; }
+  @keyframes rise { to { margin-top: -50px; opacity: 0; } }
+  .ripple {
+    position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; z-index: 14;
+    border: 3px solid #fff; border-radius: 50%; pointer-events: none; animation: ripple 0.35s forwards;
+  }
+  @keyframes ripple { from { transform: scale(0.3); opacity: 1; } to { transform: scale(1.4); opacity: 0; } }
+
+  /* Overlays */
+  .overlay {
+    position: absolute; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
+    background: rgba(20, 12, 4, 0.55); padding: 20px;
+  }
+  .overlay[hidden] { display: none; }
+  .card {
+    background: var(--cream); border-radius: 22px; padding: 22px 20px 18px; width: 100%; max-width: 360px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.35); text-align: center;
+  }
+  .card h1 { margin: 0 0 4px; font-size: 24px; }
+  .card .sub { margin: 0 0 14px; font-size: 14px; opacity: 0.7; }
+  .rules { text-align: left; font-size: 14px; line-height: 1.75; margin: 0 0 16px; padding-left: 20px; }
+  .btn {
+    display: block; width: 100%; border: 0; border-radius: 14px; padding: 13px; margin-top: 10px;
+    font: inherit; font-size: 17px; font-weight: 800; cursor: pointer;
+    background: var(--accent); color: #fff; box-shadow: 0 4px 0 var(--accent-dark);
+  }
+  .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--accent-dark); }
+  .btn.ghost { background: #efe4d2; color: var(--ink); box-shadow: 0 4px 0 #cdbda4; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0 6px; }
+  .stat { background: #fff; border-radius: 14px; padding: 10px 6px; }
+  .stat b { display: block; font-size: 24px; }
+  .stat span { font-size: 12px; opacity: 0.65; }
+  .stat.big { grid-column: span 2; background: #fff1e3; }
+  .stat.big b { font-size: 34px; color: var(--accent-dark); }
+  #saveMsg { font-size: 12px; opacity: 0.65; min-height: 18px; margin-top: 4px; }
+  #endTitle { color: var(--accent-dark); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="sceneMark"></div>
+  <div id="hud">
+    <div class="pill"><small>時間</small><span id="hudTime">60</span></div>
+    <div class="pill"><small>分數</small><span id="hudScore">0</span></div>
+    <div class="pill" id="hudLives"></div>
+  </div>
+  <div id="comboBadge"></div>
+  <div id="timeBar"></div>
+
+  <div class="overlay" id="startOverlay">
+    <div class="card">
+      <h1 id="startTitle">翠亨宿舍區</h1>
+      <p class="sub" id="startSub">獼猴來搶宵夜了！</p>
+      <ol class="rules">
+        <li>點擊冒出來的獼猴，打中就能得分</li>
+        <li>連續打中會累積連擊，分數加倍</li>
+        <li>沒打中獼猴，連擊就會歸零</li>
+        <li>獼猴逃走會搶走食物，生命 −1</li>
+        <li>60 秒結束或生命歸零，遊戲就結束</li>
+      </ol>
+      <button class="btn" id="btnStart">開始遊戲</button>
+      <button class="btn ghost" id="btnBack1">回地圖</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="endOverlay" hidden>
+    <div class="card">
+      <h1 id="endTitle">遊戲結束</h1>
+      <p class="sub" id="endSub"></p>
+      <div class="stats">
+        <div class="stat big"><b id="rScore">0</b><span>總分</span></div>
+        <div class="stat"><b id="rRate">0%</b><span>命中率</span></div>
+        <div class="stat"><b id="rCombo">0</b><span>最高連擊</span></div>
+        <div class="stat"><b id="rHits">0 / 0</b><span>命中 / 射擊</span></div>
+        <div class="stat"><b id="rReact">-</b><span>平均反應（秒）</span></div>
+      </div>
+      <div id="saveMsg"></div>
+      <button class="btn" id="btnAgain">再玩一次</button>
+      <button class="btn ghost" id="btnBack2">回地圖</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== 設定 =====
+// 只在「用一般瀏覽器測試」時才會用到：在 App 裡，成績會交給 App Inventor 的 Web 元件上傳。
+const CONFIG = {
+  API_URL: "",          // 貼上 Apps Script 網頁應用程式網址（可留空）
+  GAME_SECONDS: 60,
+  START_LIVES: 3,
+  MAX_MONKEYS: 3
+};
+
+const SCENES = {
+  cuiheng: { name: "翠亨宿舍區", food: "宵夜", bg: "images/cuiheng.jpg",
+             fallback: "linear-gradient(160deg, #6f9a5a 0%, #3d6b45 55%, #2b4a33 100%)" },
+  liberal: { name: "文學院", food: "早餐", bg: "images/liberal.jpg",
+             fallback: "linear-gradient(160deg, #e0b77a 0%, #b5794a 55%, #7a4a2c 100%)" },
+  milo:    { name: "米羅餐廳門口", food: "便當", bg: "images/milo.jpg",
+             fallback: "linear-gradient(160deg, #7fb6d6 0%, #4a86a8 55%, #2f5a78 100%)" }
+};
+
+const params = new URLSearchParams(location.search);
+const sceneKey = SCENES[params.get("scene")] ? params.get("scene") : "cuiheng";
+const scene = SCENES[sceneKey];
+const player = (params.get("player") || "訪客").slice(0, 30);
+
+// ===== 畫面元素 =====
+const $ = id => document.getElementById(id);
+const stage = $("stage");
+stage.style.backgroundImage = `url("${scene.bg}"), ${scene.fallback}`;
+$("sceneMark").textContent = scene.name;
+$("startTitle").textContent = scene.name;
+$("startSub").textContent = `獼猴來搶${scene.food}了！保護好你的${scene.food}`;
+
+const MONKEY_SVG = `
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="17" cy="46" r="13" fill="#8a5a36"/><circle cx="17" cy="46" r="7" fill="#e9a58c"/>
+  <circle cx="83" cy="46" r="13" fill="#8a5a36"/><circle cx="83" cy="46" r="7" fill="#e9a58c"/>
+  <ellipse cx="50" cy="50" rx="35" ry="36" fill="#9b6a43"/>
+  <path d="M30 20 Q50 8 70 20 Q60 16 50 18 Q40 16 30 20Z" fill="#7a4f2f"/>
+  <ellipse cx="50" cy="58" rx="25" ry="24" fill="#f0b49c"/>
+  <path d="M31 40 L45 45" stroke="#3a2416" stroke-width="4" stroke-linecap="round"/>
+  <path d="M69 40 L55 45" stroke="#3a2416" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="40" cy="51" r="5.5" fill="#2a1a10"/><circle cx="60" cy="51" r="5.5" fill="#2a1a10"/>
+  <circle cx="41.8" cy="49.2" r="1.8" fill="#fff"/><circle cx="61.8" cy="49.2" r="1.8" fill="#fff"/>
+  <ellipse cx="46" cy="63" rx="2" ry="1.5" fill="#8a4a3a"/><ellipse cx="54" cy="63" rx="2" ry="1.5" fill="#8a4a3a"/>
+  <path d="M38 72 Q50 64 62 72 Q50 78 38 72Z" fill="#6b2e24"/>
+  <path d="M43 70.5 L45 73 L47 70 M53 70 L55 73 L57 70.5" stroke="#fff" stroke-width="1.6" fill="none" stroke-linejoin="round"/>
+</svg>`;
+
+// ===== 音效（WebAudio 小嗶聲，不需要音檔） =====
+let audioCtx = null;
+function beep(freq, dur, type = "sine", vol = 0.15) {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + dur);
+  } catch (e) { /* 沒有音效也能玩 */ }
+}
+
+// ===== 遊戲狀態 =====
+let S = null;
+let tickTimer = null, spawnTimer = null;
+
+function newState() {
+  return {
+    running: false, startAt: 0, timeLeft: CONFIG.GAME_SECONDS,
+    score: 0, shots: 0, hits: 0, combo: 0, maxCombo: 0,
+    lives: CONFIG.START_LIVES, reactions: [], monkeys: new Set()
+  };
+}
+
+function renderHud() {
+  $("hudTime").textContent = Math.ceil(S.timeLeft);
+  $("hudScore").textContent = S.score;
+  $("hudLives").innerHTML = "❤️".repeat(S.lives) + "🤍".repeat(Math.max(0, CONFIG.START_LIVES - S.lives));
+  $("timeBar").style.width = (S.timeLeft / CONFIG.GAME_SECONDS * 100) + "%";
+  const cb = $("comboBadge");
+  if (S.combo >= 2) { cb.textContent = `${S.combo} 連擊！`; cb.classList.add("on"); }
+  else cb.classList.remove("on");
+}
+
+// 難度隨時間提升：獼猴停留時間 1.7s → 0.85s，出現間隔 1.0s → 0.45s
+function difficulty() {
+  const p = 1 - S.timeLeft / CONFIG.GAME_SECONDS;
+  return { stay: 1700 - 850 * p, gap: 1000 - 550 * p };
+}
+
+function spawnMonkey() {
+  if (!S.running) return;
+  if (S.monkeys.size < CONFIG.MAX_MONKEYS) {
+    const size = 92, w = stage.clientWidth, h = stage.clientHeight;
+    const x = 10 + Math.random() * Math.max(1, w - size - 20);
+    const y = 80 + Math.random() * Math.max(1, h - size - 110);
+    const { stay } = difficulty();
+    const el = document.createElement("div");
+    el.className = "monkey";
+    el.style.left = x + "px"; el.style.top = y + "px";
+    el.innerHTML = MONKEY_SVG + `<div class="timer"><i style="transition: transform ${stay}ms linear"></i></div>`;
+    const m = { el, born: performance.now(), alive: true };
+    m.escape = setTimeout(() => monkeyEscapes(m), stay);
+    el.addEventListener("pointerdown", ev => { ev.stopPropagation(); ev.preventDefault(); shoot(ev, m); });
+    stage.appendChild(el);
+    requestAnimationFrame(() => { el.querySelector(".timer i").style.transform = "scaleX(0)"; });
+    S.monkeys.add(m);
+  }
+  spawnTimer = setTimeout(spawnMonkey, difficulty().gap * (0.7 + Math.random() * 0.6));
+}
+
+function removeMonkey(m, cls) {
+  m.alive = false; clearTimeout(m.escape); S.monkeys.delete(m);
+  m.el.classList.add(cls);
+  setTimeout(() => m.el.remove(), 400);
+}
+
+function monkeyEscapes(m) {
+  if (!m.alive || !S.running) return;
+  const r = m.el.getBoundingClientRect();
+  removeMonkey(m, "flee");
+  S.lives -= 1; S.combo = 0;
+  floatText(r.left + r.width / 2, r.top + 10, `${scene.food}被搶走了！`, true);
+  stage.classList.remove("shake"); void stage.offsetWidth; stage.classList.add("shake");
+  beep(140, 0.3, "sawtooth", 0.12);
+  renderHud();
+  if (S.lives <= 0) endGame("生命歸零");
+}
+
+function shoot(ev, m) {
+  if (!S.running) return;
+  S.shots += 1;
+  ripple(ev.clientX, ev.clientY);
+  if (m && m.alive) {
+    S.hits += 1; S.combo += 1; S.maxCombo = Math.max(S.maxCombo, S.combo);
+    S.reactions.push(performance.now() - m.born);
+    const gain = 10 + Math.min(S.combo - 1, 10) * 2;   // 連擊加成：每多一連擊 +2，最多 +20
+    S.score += gain;
+    floatText(ev.clientX, ev.clientY - 20, `+${gain}`);
+    beep(660 + Math.min(S.combo, 10) * 40, 0.12, "square", 0.08);
+    removeMonkey(m, "hit");
+  } else {
+    S.combo = 0;
+    beep(220, 0.08, "triangle", 0.06);
+  }
+  renderHud();
+}
+
+function ripple(x, y) {
+  const r = document.createElement("div");
+  r.className = "ripple"; r.style.left = x + "px"; r.style.top = y + "px";
+  stage.appendChild(r); setTimeout(() => r.remove(), 400);
+}
+function floatText(x, y, text, bad) {
+  const f = document.createElement("div");
+  f.className = "float" + (bad ? " bad" : "");
+  f.style.left = x + "px"; f.style.top = y + "px"; f.textContent = text;
+  stage.appendChild(f); setTimeout(() => f.remove(), 750);
+}
+
+stage.addEventListener("pointerdown", ev => {
+  if (!S || !S.running || ev.target.closest(".overlay")) return;
+  shoot(ev, null);
+});
+
+function startGame() {
+  beep(1, 0.01, "sine", 0.0001);   // 手機需要使用者點擊後才能播放聲音
+  document.querySelectorAll(".monkey").forEach(el => el.remove());
+  S = newState();
+  S.running = true; S.startAt = performance.now();
+  $("startOverlay").hidden = true; $("endOverlay").hidden = true;
+  renderHud();
+  tickTimer = setInterval(() => {
+    S.timeLeft = Math.max(0, CONFIG.GAME_SECONDS - (performance.now() - S.startAt) / 1000);
+    renderHud();
+    if (S.timeLeft <= 0) endGame("時間到");
+  }, 100);
+  spawnTimer = setTimeout(spawnMonkey, 500);
+}
+
+function endGame(reason) {
+  if (!S.running) return;
+  S.running = false;
+  clearInterval(tickTimer); clearTimeout(spawnTimer);
+  S.monkeys.forEach(m => removeMonkey(m, "flee"));
+
+  const rate = S.shots ? Math.round(S.hits / S.shots * 1000) / 10 : 0;
+  const avgMs = S.reactions.length ? Math.round(S.reactions.reduce((a, b) => a + b, 0) / S.reactions.length) : 0;
+  const result = {
+    type: "result", ts: Date.now(), player, scene: sceneKey, sceneName: scene.name,
+    shots: S.shots, hits: S.hits, hitRate: rate, maxCombo: S.maxCombo, score: S.score,
+    avgReactionMs: avgMs, livesLeft: Math.max(0, S.lives),
+    durationSec: Math.round((performance.now() - S.startAt) / 100) / 10
+  };
+
+  $("endTitle").textContent = reason === "時間到" ? "時間到！" : `${scene.food}全被搶光了！`;
+  $("endSub").textContent = `${player}｜${scene.name}`;
+  $("rScore").textContent = result.score;
+  $("rRate").textContent = rate + "%";
+  $("rCombo").textContent = result.maxCombo;
+  $("rHits").textContent = `${result.hits} / ${result.shots}`;
+  $("rReact").textContent = avgMs ? (avgMs / 1000).toFixed(2) : "-";
+  $("endOverlay").hidden = false;
+  beep(392, 0.25, "triangle", 0.12);
+  sendResult(result);
+}
+
+// ===== 把成績交出去 =====
+// 在 App Inventor 的 WebViewer 裡：寫進 WebViewString，App 端的 WebViewStringChange 事件會收到
+// 在一般瀏覽器裡：直接 POST 到 Apps Script（需填 CONFIG.API_URL）
+function sendResult(result) {
+  const msg = $("saveMsg");
+  if (window.AppInventor && window.AppInventor.setWebViewString) {
+    window.AppInventor.setWebViewString(JSON.stringify(result));
+    msg.textContent = "成績已交給 App 上傳雲端";
+  } else if (CONFIG.API_URL) {
+    msg.textContent = "上傳中…";
+    fetch(CONFIG.API_URL, { method: "POST", body: JSON.stringify(result) })
+      .then(r => r.json()).then(() => msg.textContent = "已上傳到 Google 雲端")
+      .catch(() => msg.textContent = "上傳失敗，請檢查網路");
+  } else {
+    msg.textContent = "測試模式：成績未上傳";
+    console.log("RESULT", result);
+  }
+}
+
+function backToMap() {
+  if (window.AppInventor && window.AppInventor.setWebViewString) {
+    window.AppInventor.setWebViewString(JSON.stringify({ type: "back", ts: Date.now() }));
+  } else {
+    history.back();
+  }
+}
+
+$("btnStart").onclick = startGame;
+$("btnAgain").onclick = startGame;
+$("btnBack1").onclick = backToMap;
+$("btnBack2").onclick = backToMap;
+
+S = newState(); renderHud();
+</script>
+</body>
+</html>

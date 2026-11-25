@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="UTF-8">
+<style>
+  body { margin: 0; padding: 16px; background: #fff8ec; color: #2b2118;
+         font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif; }
+  h2 { font-size: 16px; margin: 22px 0 8px; }
+  .hello { font-size: 20px; font-weight: 800; margin: 0 0 12px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .card { background: #fff; border-radius: 16px; padding: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+  .card b { display: block; font-size: 26px; color: #c4520a; }
+  .card span { font-size: 12px; opacity: 0.65; }
+  .chartBox { background: #fff; border-radius: 16px; padding: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 16px; overflow: hidden;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.06); font-size: 14px; }
+  th, td { padding: 9px 8px; text-align: left; border-bottom: 1px solid #f1e6d4; }
+  th { background: #ffe8d2; font-size: 12px; }
+  tr.me td { background: #fff1e3; font-weight: 700; }
+  .empty { text-align: center; padding: 40px 10px; opacity: 0.7; line-height: 1.8; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+const D = <?!= dataJson ?>;
+const app = document.getElementById('app');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+if (!D.games) {
+  app.innerHTML = `<p class="hello">${esc(D.player || '同學')}，你好</p>
+    <div class="empty">還沒有戰績喔！<br>回地圖選一個場景，開始趕猴子吧。</div>`;
+} else {
+  app.innerHTML = `
+    <p class="hello">${esc(D.player)} 的戰績</p>
+    <div class="grid">
+      <div class="card"><b>${D.hitRate}%</b><span>總命中率</span></div>
+      <div class="card"><b>${D.bestCombo}</b><span>最高連擊</span></div>
+      <div class="card"><b>${D.bestScore}</b><span>最高分</span></div>
+      <div class="card"><b>${D.games}</b><span>遊戲場數</span></div>
+    </div>
+    <h2>最近 ${D.recent.length} 場：命中率與連擊</h2>
+    <div class="chartBox"><canvas id="trend" height="220"></canvas></div>
+    <h2>三個場景比一比</h2>
+    <div class="chartBox"><canvas id="scenes" height="200"></canvas></div>
+    <h2>全校排行榜</h2>
+    <table>
+      <tr><th>#</th><th>玩家</th><th>最高分</th><th>連擊</th><th>命中率</th></tr>
+      ${D.leaderboard.map((r, i) => `<tr class="${r.player === D.player ? 'me' : ''}">
+        <td>${i + 1}</td><td>${esc(r.player)}</td><td>${r.score}</td><td>${r.maxCombo}</td><td>${r.hitRate}%</td></tr>`).join('')}
+    </table>`;
+
+  Chart.defaults.font.family = '"Noto Sans TC", "PingFang TC", sans-serif';
+  new Chart(document.getElementById('trend'), {
+    data: {
+      labels: D.recent.map((r, i) => `第${D.games - D.recent.length + i + 1}場`),
+      datasets: [
+        { type: 'line', label: '命中率 (%)', data: D.recent.map(r => r.hitRate), yAxisID: 'y',
+          borderColor: '#ff7a1a', backgroundColor: '#ff7a1a', tension: 0.3 },
+        { type: 'bar', label: '最高連擊', data: D.recent.map(r => r.maxCombo), yAxisID: 'y2',
+          backgroundColor: 'rgba(47,163,107,0.35)' }
+      ]
+    },
+    options: {
+      plugins: { legend: { position: 'bottom' } },
+      scales: {
+        y: { min: 0, max: 100, title: { display: true, text: '命中率 (%)' } },
+        y2: { position: 'right', min: 0, grid: { drawOnChartArea: false }, title: { display: true, text: '連擊' } }
+      }
+    }
+  });
+  new Chart(document.getElementById('scenes'), {
+    type: 'bar',
+    data: {
+      labels: D.byScene.map(s => `${s.name}（${s.games}場）`),
+      datasets: [{ label: '命中率 (%)', data: D.byScene.map(s => s.hitRate),
+                   backgroundColor: ['#6f9a5a', '#b5794a', '#4a86a8'] }]
+    },
+    options: { plugins: { legend: { display: false } }, scales: { y: { min: 0, max: 100 } } }
+  });
+}
+</script>
+</body>
+</html>
